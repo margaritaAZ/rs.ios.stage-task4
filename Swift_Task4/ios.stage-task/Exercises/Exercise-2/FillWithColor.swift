@@ -2,20 +2,21 @@ import Foundation
 
 final class FillWithColor {
     
-    func changePixelColor(_ image: [[Int]], _ row: Int, _ column: Int, _ newColor: Int, _ oldColor: Int) -> [[Int]]{
-        guard (row >= 0 && row < image.count && column >= 0 && column < (image.first?.count ?? 0) && newColor != oldColor) else {
-            return image
-        }
+    func changePixelColor(_ image: inout [[Int]], _ visitedPixelsSet: inout [[Bool]], _ row: Int, _ column: Int, _ newColor: Int, _ oldColor: Int){
         
-        var newImage = image
-        if  oldColor == image[row][column] {
-            newImage[row][column] = newColor
-            newImage = changePixelColor(newImage, row-1, column, newColor, oldColor)
-            newImage = changePixelColor(newImage, row+1, column, newColor, oldColor)
-            newImage = changePixelColor(newImage, row, column-1, newColor, oldColor)
-            newImage = changePixelColor(newImage, row, column+1, newColor, oldColor)
+        guard (row >= 0 && row < image.count && column >= 0 && column < (image.first?.count ?? 0)) else {
+            return
         }
-        return newImage
+        guard !visitedPixelsSet[row][column] && oldColor == image[row][column] else {
+            return
+        }
+        image[row][column] = newColor
+        visitedPixelsSet[row][column] = true
+        changePixelColor(&image, &visitedPixelsSet, row-1, column, newColor, oldColor)
+        changePixelColor(&image, &visitedPixelsSet, row+1, column, newColor, oldColor)
+        changePixelColor(&image, &visitedPixelsSet, row, column-1, newColor, oldColor)
+        changePixelColor(&image, &visitedPixelsSet, row, column+1, newColor, oldColor)
+        return
     }
     
     func fillWithColor(_ image: [[Int]], _ row: Int, _ column: Int, _ newColor: Int) -> [[Int]] {
@@ -23,12 +24,19 @@ final class FillWithColor {
         let n = image.first?.count ?? 0
         
         guard  (m <= 50 && m >= 1 && n <= 50 && n >= 1 &&
-                newColor >= 0 && newColor < 65536 &&
-                row >= 0 && row < m && column >= 0 && column < n) else {
+                    newColor >= 0 && newColor < 65536 &&
+                    row >= 0 && row < m && column >= 0 && column < n) else {
             return image
         }
         
-        return changePixelColor(image, row, column, newColor, image[row][column])
+        guard newColor != image[row][column] else {
+            return image
+        }
         
+        var coloredImage = image
+        var visitedPixelsSet: [[Bool]] = Array(repeating: Array(repeating: false, count: n), count: m)
+        
+        changePixelColor(&coloredImage, &visitedPixelsSet, row, column, newColor, coloredImage[row][column])
+        return coloredImage
     }
 }

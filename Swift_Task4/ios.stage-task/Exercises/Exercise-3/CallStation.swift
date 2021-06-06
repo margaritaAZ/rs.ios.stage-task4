@@ -12,33 +12,53 @@ extension CallStation: Station {
     }
     
     func add(user: User) {
-
-        guard !(self.stationUsers?.contains(user) ?? false) else{
+        guard !(stationUsers?.contains(user) ?? false) else{
             return
         }
-        
-        if self.stationUsers != nil {
-            self.stationUsers?.append(user)
+        if stationUsers != nil {
+            stationUsers?.append(user)
         } else {
-            self.stationUsers = [user]
+            stationUsers = [user]
         }
     }
     
     func remove(user: User) {
-        guard let users = stationUsers else {
+        guard let sUsers = stationUsers else {
             return
         }
         var userIndex: Int?
-        for (index,stationUser) in users.enumerated() {
+        for (index,stationUser) in sUsers.enumerated() {
             if stationUser.id == user.id {
                 userIndex = index
+                break
             }
         }
-        
         if let index = userIndex {
             stationUsers?.remove(at: index)
         }
     }
+    
+    func addCallToCallsList(from: User, to: User, callStatus: CallStatus) -> CallID {
+        let call = Call(id: UUID(), incomingUser: from, outgoingUser: to, status: callStatus)
+        if callsList != nil {
+            callsList?.append(call)
+        } else {
+            callsList = [call]
+        }
+        return call.id
+    }
+    
+    func changeCallStatus(call: Call, index: Int, newStatus: CallStatus) -> CallID? {
+        let changedCall = Call(id: call.id, incomingUser: call.incomingUser, outgoingUser: call.outgoingUser, status: newStatus)
+        callsList?.remove(at: index)
+        callsList?.insert(changedCall, at: index)
+        
+        if newStatus == .ended(reason: .error) {
+            return nil
+        }
+        return call.id
+    }
+    
     
     func execute(action: CallAction) -> CallID? {
         switch action {
@@ -50,51 +70,29 @@ extension CallStation: Station {
                 return nil
             }
             guard users.contains(user2) else {
-                let call = Call(id: UUID(), incomingUser: user1, outgoingUser: user2, status: .ended(reason: .error))
-                if callsList != nil {
-                    callsList?.append(call)
-                }
-                callsList = [call]
-                return call.id
+                return addCallToCallsList(from: user1, to: user2, callStatus: .ended(reason: .error))
             }
             
             if let calls = callsList {
                 for call in calls{
-                    // добавить условие наоборот
-                    if (call.outgoingUser.id == user2.id && call.incomingUser.id != user1.id && call.status == .talk) {
-                        let call = Call(id: UUID(), incomingUser: user1, outgoingUser: user2, status: .ended(reason: .userBusy))
-                        callsList?.append(call)
-                        return call.id
+                    if ((call.outgoingUser.id == user2.id || call.incomingUser.id == user2.id) && call.status == .talk) {
+                        return addCallToCallsList(from: user1, to: user2, callStatus: .ended(reason: .userBusy))
                     }
-                    let call = Call(id: UUID(), incomingUser: user1, outgoingUser: user2, status: .calling)
-                    callsList?.append(call)
-                    return call.id
                 }
             }
-            let call = Call(id: UUID(), incomingUser: user1, outgoingUser: user2, status: .calling)
-            self.callsList = [call]
-            return call.id
+            return addCallToCallsList(from: user1, to: user2, callStatus: .calling)
             
         case .answer(let user2):
             guard let calls = callsList else {
                 return nil
             }
             
-           // var callIndex: Int?
-            var callAnswer: Call?
             for (index, call) in calls.enumerated() {
                 if (call.outgoingUser.id == user2.id && call.status == .calling) {
-                   // callIndex = index
                     if (stationUsers?.contains(user2) ?? false) {
-                        callAnswer = Call(id: call.id, incomingUser: call.incomingUser, outgoingUser: call.outgoingUser, status: .talk)
-                        self.callsList?.remove(at: index)
-                        self.callsList?.insert(callAnswer!, at: index)
-                        return callAnswer?.id
+                        return changeCallStatus(call: call, index: index, newStatus: .talk)
                     } else {
-                        callAnswer = Call(id: call.id, incomingUser: call.incomingUser, outgoingUser: call.outgoingUser, status: .ended(reason: .error))
-                        self.callsList?.remove(at: index)
-                        self.callsList?.insert(callAnswer!, at: index)
-                        return nil
+                        return changeCallStatus(call: call, index: index, newStatus: .ended(reason: .error))
                     }
                 }
             }
@@ -105,25 +103,14 @@ extension CallStation: Station {
                 return nil
             }
             
-            var callIndex: Int?
-            var callTalking: Call?
             for (index, call) in calls.enumerated() {
                 if ((call.outgoingUser.id == user.id || call.incomingUser.id == user.id) &&
                         call.status == .talk) {
-                    callIndex = index
-                    callTalking = Call(id: call.id, incomingUser: call.incomingUser, outgoingUser: call.outgoingUser, status: .ended(reason: .end))
-                    break
+                    return changeCallStatus(call: call, index: index, newStatus: .ended(reason: .end))
                 }
                 if (call.outgoingUser.id == user.id && call.status == .calling) {
-                    callIndex = index
-                    callTalking = Call(id: call.id, incomingUser: call.incomingUser, outgoingUser: call.outgoingUser, status: .ended(reason: .cancel))
-                    break
+                    return changeCallStatus(call: call, index: index, newStatus: .ended(reason: .cancel))
                 }
-            }
-            if callIndex != nil {
-                self.callsList?.remove(at: callIndex!)
-                self.callsList?.insert(callTalking!, at: callIndex!)
-                return callTalking?.id
             }
             return nil
         }
@@ -170,7 +157,6 @@ extension CallStation: Station {
                 return call
             }
         }
-        
         return nil
     }
 }
